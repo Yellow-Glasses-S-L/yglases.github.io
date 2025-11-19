@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timeline Gantt - Migración</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        
+        .subtitle {
+            color: #718096;
+            margin-bottom: 30px;
+            font-size: 16px;
+        }
+        
+        .legend {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f7fafc;
+            border-radius: 12px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .legend-box {
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+        }
+        
+        .legend-text {
+            font-size: 14px;
+            color: #4a5568;
+            font-weight: 500;
+        }
+        
+        .gantt-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        
+        .gantt {
+            min-width: 1200px;
+        }
+        
+        .gantt-header {
+            display: grid;
+            grid-template-columns: 280px repeat(20, 1fr);
+            gap: 2px;
+            margin-bottom: 15px;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+            padding-bottom: 10px;
+        }
+        
+        .week-header {
+            text-align: center;
+            padding: 12px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            color: #4a5568;
+            background: #edf2f7;
+            border-radius: 8px;
+        }
+        
+        .week-number {
+            display: block;
+            color: #2d3748;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+        
+        .week-dates {
+            display: block;
+            color: #718096;
+            font-size: 10px;
+        }
+        
+        .task-row {
+            display: grid;
+            grid-template-columns: 280px repeat(20, 1fr);
+            gap: 2px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        
+        .task-label {
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 13px;
+            color: #2d3748;
+            background: #f7fafc;
+            border-radius: 8px;
+            border-left: 4px solid #cbd5e0;
+        }
+        
+        .task-label.deadline {
+            border-left-color: #e53e3e;
+            background: #fff5f5;
+        }
+        
+        .task-label.phase {
+            border-left-color: #3182ce;
+        }
+        
+        .timeline-cell {
+            height: 50px;
+            position: relative;
+        }
+        
+        .task-bar {
+            position: absolute;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .task-bar:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+        
+        .critical { background: linear-gradient(135deg, #fc8181 0%, #e53e3e 100%); }
+        .high { background: linear-gradient(135deg, #f6ad55 0%, #ed8936 100%); }
+        .medium { background: linear-gradient(135deg, #68d391 0%, #38a169 100%); }
+        .milestone { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 40px;
+        }
+        
+        .deadline-marker {
+            position: absolute;
+            width: 3px;
+            height: 50px;
+            background: #e53e3e;
+            top: 0;
+            box-shadow: 0 0 10px rgba(229, 62, 62, 0.5);
+        }
+        
+        .deadline-marker::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: -6px;
+            width: 0;
+            height: 0;
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-top: 10px solid #e53e3e;
+        }
+        
+        .deadline-label {
+            position: absolute;
+            top: -25px;
+            left: -40px;
+            background: #e53e3e;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            white-space: nowrap;
+            box-shadow: 0 2px 8px rgba(229, 62, 62, 0.3);
+        }
+        
+        .section-header {
+            grid-column: 1 / -1;
+            background: #2d3748;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin: 20px 0 10px 0;
+            font-weight: 700;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .empty-cell {
+            background: transparent;
+        }
+
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+            .container {
+                box-shadow: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Timeline de Migración IMIS → HubSpot</h1>
+        <p class="subtitle">Noviembre 2025 - Mayo 2026 | Yellow Glasses Agency</p>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-box critical"></div>
+                <span class="legend-text">Crítico (Deadline rígido)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box high"></div>
+                <span class="legend-text">Alta prioridad</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box medium"></div>
+                <span class="legend-text">Desarrollo continuo</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box milestone"></div>
+                <span class="legend-text">Hito / Go-live</span>
+            </div>
+        </div>
+        
+        <div class="gantt-container">
+            <div class="gantt">
+                <div class="gantt-header">
+                    <div></div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 1</span>
+                        <span class="week-dates">18-22 Nov</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 2</span>
+                        <span class="week-dates">25-29 Nov</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 3</span>
+                        <span class="week-dates">2-6 Dic</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 4</span>
+                        <span class="week-dates">9-13 Dic</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 5</span>
+                        <span class="week-dates">16-20 Dic</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 6</span>
+                        <span class="week-dates">23-27 Dic</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 7</span>
+                        <span class="week-dates">30 Dic-3 Ene</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 8</span>
+                        <span class="week-dates">6-10 Ene</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 9</span>
+                        <span class="week-dates">13-17 Ene</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 10</span>
+                        <span class="week-dates">20-24 Ene</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Sem 11</span>
+                        <span class="week-dates">27-31 Ene</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Feb</span>
+                        <span class="week-dates">Febrero</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Mar</span>
+                        <span class="week-dates">Marzo</span>
+                    </div>
+                    <div class="week-header">
+                        <span class="week-number">Abr</span>
+                        <span class="week-dates">Abril</span>
+                    </div>
+                </div>
+                
+                <!-- DEADLINES LICENCIAS -->
+                <div class="section-header">📅 DEADLINES CRÍTICOS - LICENCIAS</div>
+                
+                <div class="task-row">
+                    <div class="task-label deadline">🔥 Bridge IMIS-Mailchimp</div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="deadline-marker" style="left: 50%;">
+                            <div class="deadline-label">15 Dic</div>
+                        </div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <div class="task-row">
+                    <div class="task-label deadline">🔥 Bridge IMIS-Moodle</div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="deadline-marker" style="left: 20%;">
+                            <div class="deadline-label">31 Dic</div>
+                        </div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <div class="task-row">
+                    <div class="task-label deadline">🔥 Altran (RPA Facturas)</div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="deadline-marker" style="left: 20%;">
+                            <div class="deadline-label">3 Ene</div>
+                        </div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <div class="task-row">
+                    <div class="task-label deadline">⚠️ Aviso cancelación IMIS</div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="deadline-marker" style="left: 90%;">
+                            <div class="deadline-label">29 Ene</div>
+                        </div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <div class="task-row">
+                    <div class="task-label deadline">📆 Fin licencia IMIS</div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="deadline-marker" style="left: 90%;">
+                            <div class="deadline-label">30 Abr</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- PLAN A -->
+                <div class="section-header">🎯 PLAN A - Lanzamiento Completo</div>
+                
+                <div class="task-row">
+                    <div class="task-label phase">HubSpot ↔ Mailchimp</div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">URGENTE</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">Testing</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 0;">Validación</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 50%;">Final</div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <div class="task-row">
+                    <div class="task-label phase">HubSpot → Business Central</div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">Setup</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">n8n</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">Testing</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">Validación</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 0;">UAT</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 0;">Ajustes</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar milestone" style="left: 0; right: 50%;">✅ GO LIVE</div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <div class="task-row">
+                    <div class="task-label phase">HubSpot → Moodle</div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">Setup</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">n8n</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">Testing</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar critical" style="left: 0; right: 0;">Validación</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 0;">UAT</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 0;">Ajustes</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar milestone" style="left: 0; right: 50%;">✅ GO LIVE</div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <div class="task-row">
+                    <div class="task-label phase">Supabase + WeWeb Portal</div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">Schema</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">Sync</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">Dev</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">Dev</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 0;">Portal MVP</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 0;">Testing</div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar milestone" style="left: 0; right: 0;">🚀 LAUNCH</div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <!-- PLAN B -->
+                <div class="section-header">🔄 PLAN B - Contingencia (si se activa 20 Dic)</div>
+                
+                <div class="task-row">
+                    <div class="task-label phase">Bridge IMIS → HubSpot</div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 0;">Activar</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar milestone" style="left: 0; right: 0;">✅ LIVE</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">Monitoreo</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">→</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">→</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">→</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">→</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">→</div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <div class="task-row">
+                    <div class="task-label phase">Portal WeWeb (sin presión)</div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">Dev</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">Dev</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">Dev</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar medium" style="left: 0; right: 0;">Testing</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar high" style="left: 0; right: 0;">UAT</div>
+                    </div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar milestone" style="left: 0; right: 0;">🚀 LAUNCH</div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                </div>
+                
+                <div class="task-row">
+                    <div class="task-label phase">Sunset IMIS Portal</div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell"></div>
+                    <div class="timeline-cell" style="position: relative;">
+                        <div class="task-bar milestone" style="left: 0; right: 0;">👋 APAGAR</div>
+                    </div>
+                    <div class="timeline-cell"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 40px; padding: 20px; background: #fff5f5; border-left: 4px solid #e53e3e; border-radius: 8px;">
+            <h3 style="color: #e53e3e; margin-bottom: 10px; font-size: 16px;">⚠️ Punto de Decisión: 20 Diciembre 2025</h3>
+            <p style="color: #4a5568; font-size: 14px; line-height: 1.6;">
+                Si el portal WeWeb no está listo para UAT, activamos Plan B automáticamente. 
+                Las integraciones críticas (Business Central y Moodle) funcionan en ambos planes.
+                Plan B mantiene IMIS como portal legacy hasta Marzo 2026.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
